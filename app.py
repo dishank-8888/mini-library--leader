@@ -18,3 +18,27 @@ def index():
 @app.route('/static/covers/<filename>')
 def cover_image(filename):
     return send_from_directory(UPLOAD_FOLDER, filename)
+    from flask import request, jsonify, session
+
+users = {}
+books = {}
+transactions = []
+
+@app.route('/login', methods=['POST'])
+def login():
+    data = request.json
+    name = data.get('name', '').strip()
+    if not name:
+        return jsonify({'status':'error', 'message':'Name required'}), 400
+    user = next((u for u in users.values() if u['name'].lower() == name.lower()), None)
+    if not user:
+        user_id = str(len(users) + 1)
+        user = {'id': user_id, 'name': name}
+        users[user_id] = user
+    session['user_id'] = user['id']
+    return jsonify({'status':'success', 'user': user})
+
+@app.route('/logout', methods=['POST'])
+def logout():
+    session.pop('user_id', None)
+    return jsonify({'status':'success'})
