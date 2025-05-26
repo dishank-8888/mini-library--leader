@@ -5,8 +5,15 @@ discard this
 <head>
     <meta charset="UTF-8">
     <title>Mini Library Management System</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+   <!-- AFTER -->
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
+    /* Add this to your existing CSS */
+    @media (max-width: 768px) {
+        .flex { flex-direction: column; gap: 20px; }
+        .panel { min-width: auto; }
+        nav ul { flex-direction: column; align-items: center; gap: 10px; }
+    }
     /* --- Part 1: Structure and Styling --- */
     body {
         font-family: 'Segoe UI', sans-serif;
