@@ -49,3 +49,8 @@ def check_session():
     if user_id and user_id in users:
         return jsonify({'logged_in':True, 'user':users[user_id]})
     return jsonify({'logged_in':False})
+@app.route('/books')
+def list_books():
+    if 'user_id' not in session:
+        return jsonify({'status':'error', 'message':'Login required'}), 401
+    return jsonify({'books': list(books.values())})
