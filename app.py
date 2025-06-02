@@ -62,4 +62,3 @@ def list_books():
         return jsonify({'status':'error', 'message':'Login required'}), 401
     return jsonify({'books': list(books.values())})
 
-
