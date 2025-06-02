@@ -63,3 +63,25 @@ def list_books():
         return jsonify({'status':'error', 'message':'Login required'}), 401
     return jsonify({'books': list(books.values())})
 
+@app.route('/add_book', methods=['POST'])
+def add_book():
+    if 'user_id' not in session:
+        return jsonify({'status':'error', 'message':'Login required'}), 401
+    title = request.form.get('title', '').strip()
+    author = request.form.get('author', '').strip()
+    file = request.files.get('cover')
+    if not title or not author or not file:
+        return jsonify({'status':'error', 'message':'All fields required'}), 400
+    if not allowed_file(file.filename):
+        return jsonify({'status':'error', 'message':'Invalid image type. Allowed: png, jpg, jpeg, gif'}), 400
+    filename = secure_filename(file.filename)
+    file.save(os.path.join(UPLOAD_FOLDER, filename))
+    book_id = str(len(books) + 1)
+    books[book_id] = {
+        'id': book_id,
+        'title': title,
+        'author': author,
+        'cover': filename,
+        'owner': session['user_id']
+    }
+    return jsonify({'status':'success', 'book': books[book_id]})
