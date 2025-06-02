@@ -37,13 +37,14 @@ def login():
     if user:
         session['user_id'] = user['id']
         return jsonify({'status':'success', 'user': user})
+    # Check if name exists case-insensitively
     if any(u['name'].lower() == name.lower() for u in users.values()):
         return jsonify({'status':'error', 'message':'Username already exists'}), 400
     user_id = str(len(users) + 1)
     user = {'id': user_id, 'name': name}
     users[user_id] = user
     session['user_id'] = user['id']
-    return jsonify({'status':'success', 'user': user})
+    return jsonify({'status':'success', 'user': user})  
 
 @app.route('/logout', methods=['POST'])
 def logout():
