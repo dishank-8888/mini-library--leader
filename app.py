@@ -12,6 +12,32 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+# --- User Management ---
+@app.route('/users/<user_id>', methods=['GET', 'POST', 'DELETE'])
+def manage_users():
+    if request.method == 'GET':
+        return jsonify(list(users.values()))
+    elif request.method == 'POST':
+        data = request.json
+        name = data.get('name', '').strip()
+        if not name:
+            return jsonify({'error':'Name required'}), 400
+        user_id = str(uuid.uuid4()) #generates unique uuid
+        users[user_id] = {'id': user_id, 'name': name}
+        return jsonify(users[user_id]), 201
+    elif request.method == 'DELETE':
+        user_id = request.args.get('id')
+        if user_id in users:
+            del users[user_id]
+            # Remove user's borrowed books
+            for tx in list(transactions):
+                if tx['user_id'] == user_id:
+                    transactions.remove(tx)
+            return '', 204
+        return 'User not found', 404
+def delete_user(user_id):
+    if user_id in users:
+        
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -37,13 +63,14 @@ def login():
     if user:
         session['user_id'] = user['id']
         return jsonify({'status':'success', 'user': user})
+    # Check if name exists case-insensitively
     if any(u['name'].lower() == name.lower() for u in users.values()):
         return jsonify({'status':'error', 'message':'Username already exists'}), 400
     user_id = str(len(users) + 1)
     user = {'id': user_id, 'name': name}
     users[user_id] = user
     session['user_id'] = user['id']
-    return jsonify({'status':'success', 'user': user})
+    return jsonify({'status':'success', 'user': user})  
 
 @app.route('/logout', methods=['POST'])
 def logout():
@@ -61,4 +88,86 @@ def list_books():
     if 'user_id' not in session:
         return jsonify({'status':'error', 'message':'Login required'}), 401
     return jsonify({'books': list(books.values())})
+
+@app.route('/add_book', methods=['POST'])
+def add_book():
+    if 'user_id' not in session:
+        return jsonify({'status':'error', 'message':'Login required'}), 401
+    title = request.form.get('title', '').strip()
+    author = request.form.get('author', '').strip()
+    file = request.files.get('cover')
+    if not title or not author or not file:
+        return jsonify({'status':'error', 'message':'All fields required'}), 400
+    if not allowed_file(file.filename):
+        return jsonify({'status':'error', 'message':'Invalid image type. Allowed: png, jpg, jpeg, gif'}), 400
+    filename = secure_filename(file.filename)
+    file.save(os.path.join(UPLOAD_FOLDER, filename))
+    book_id = str(len(books) + 1)
+    books[book_id] = {
+        'id': book_id,
+        'title': title,
+        'author': author,
+        'cover': filename,
+        'owner': session['user_id']
+    }
+    return jsonify({'status':'success', 'book': books[book_id]})
+from datetime import datetime
+
+# --- Borrow/Return ---
+@app.route('/transactions', methods=['GET', 'POST'])
+def manage_transactions():
+    if request.method == 'GET':
+        return jsonify(transactions)
+    elif request.method == 'POST':
+        data = request.json
+        action = data['action'] # 'borrow' or 'return'
+        user_id = data['user_id']
+        book_id = data['book_id']
+        if user_id not in users or book_id not in books:
+            return jsonify({'status':'error', 'message':'Invalid user or book'}), 400
+        is_borrowed = any(
+            tx for tx in transactions
+            if tx['book_id'] == book_id and tx['action']=='borrow' and
+            not any(
+                t2 for t2 in transactions
+                if t2['book_id']==book_id and t2['action']=='return' and t2['date'] > tx['date']
+            )
+        )
+        if action == 'borrow':
+            if is_borrowed:
+                return jsonify({'status':'error', 'message':'Book already borrowed'}), 400
+        elif action == 'return':
+            if not is_borrowed:
+                return jsonify({'status':'error', 'message':'Book is not borrowed'}), 400
+        date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        transactions.append({
+            'user_id': user_id,
+            'user_name': users[user_id]['name'],
+            'book_id': book_id,
+            'book_title': books[book_id]['title'],
+            'action': action,
+            'date': date
+        })
+        return jsonify({'status': 'success'}), 201
+    # --- User Borrowed Books ---
+@app.route('/user_borrowed_books')
+def user_borrowed_books():
+    user_id = request.args.get('user_id')
+    borrowed = []
+    for tx in transactions:
+        if tx['user_id'] == user_id and tx['action'] == 'borrow':
+            # Check if not returned
+            book_id = tx['book_id']
+            returned = any(
+                t2 for t2 in transactions
+                if t2['book_id']==book_id and t2['user_id']==user_id and t2['action']=='return' and t2['date'] > tx['date']
+            )
+            if not returned:
+                book = books[book_id].copy()
+                if book['cover']:
+                    book['cover_url'] = '/static/covers/' + book['cover']
+                else:
+                    book['cover_url'] = ''
+                borrowed.append(book)
+    return jsonify(borrowed)
 
